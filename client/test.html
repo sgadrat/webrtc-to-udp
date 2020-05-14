@@ -1,0 +1,19 @@
+<html>
+<head>
+<script src="webrtc-to-udp.js"></script>
+<script>
+function doit() {
+	wtu.get_channel(
+		{'address': '127.0.0.1', 'port': 8080},
+		{'address': '127.0.0.1', 'port': 1234},
+	)
+	.then(function(chan) {
+		console.log('Channel available for pwning noobs!');
+		chan.send('kikoo');
+	});
+}
+</script>
+</head>
+<body onload="doit();">
+</body>
+</html>
