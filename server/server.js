@@ -1,7 +1,8 @@
 'use strict';
 
-const wrtc = require('wrtc');
+const dgram = require('dgram');
 const WebSocket = require('ws');
+const wrtc = require('wrtc');
 
 let clients = {};
 
@@ -21,8 +22,9 @@ function new_datachannel(client_id, chan) {
 }
 
 function datachannel_message(client_id, message) {
-	console.log(`got a datachannel message from ${client_id}`);
-	//TODO relay message
+	console.log(`got a datachannel message from ${client_id}: ${typeof message}`);
+	let client = clients[client_id];
+	client.udp_socket.send(message, client.relay_destination.port, client.relay_destination.address);
 }
 
 function datachannel_close(client_id) {
@@ -37,7 +39,16 @@ function websocket_message(client_id, message) {
 	let client = clients[client_id];
 
 	if (msg.type === 'relay.offer') {
-		//TODO create udp socket based on msg.relay_destination
+		//TODO Reject if the destination is not whitelisted
+		//TODO Resolve destination host (else it will be silently done by dgram.Socket.send() for each packet)
+
+		// Create UDP socket based on msg.relay_destination
+		client.relay_destination = msg.relay_destination;
+		client.udp_socket = dgram.createSocket('udp4');
+		client.udp_socket.bind();
+		client.udp_socket.on('message', function(msg, remote_info) { udp_message(client_id, msg); });
+
+		// Accept ICE offer
 		client.wrtc_connection.setRemoteDescription(msg.ice_offer)
 		.then(() => client.wrtc_connection.createAnswer())
 		.then(answer => client.wrtc_connection.setLocalDescription(answer))
@@ -59,7 +70,12 @@ function websocket_close(client_id) {
 	clean_client(client_id);
 }
 
-const wss = new WebSocket.Server({ port: 8080 });
+function udp_message(client_id, message) {
+	console.log(`got an udp message for ${client_id}`);
+	clients[client_id].data_channel.send(message);
+}
+
+const wss = new WebSocket.Server({ port: 3003 });
 wss.on('connection', function connection(ws, request, client) {
 	let client_id = `${request.socket.remoteAddress}-${request.socket.remotePort}`;
 	console.log(`new connection from ${client_id}`);
@@ -68,6 +84,7 @@ wss.on('connection', function connection(ws, request, client) {
 	clients[client_id] = {
 		web_socket: ws,
 		udp_socket: null,
+		relay_destination: null,
 		data_channel: null,
 		wrtc_connection: new wrtc.RTCPeerConnection({
 			iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],

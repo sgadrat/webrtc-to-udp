@@ -4,12 +4,14 @@
 <script>
 function doit() {
 	wtu.get_channel(
-		{'address': '127.0.0.1', 'port': 8080},
+		{'address': 'localhost', 'port': 3003},
 		{'address': '127.0.0.1', 'port': 1234},
 	)
 	.then(function(chan) {
 		console.log('Channel available for pwning noobs!');
-		chan.send('kikoo');
+		chan.binaryType = 'arraybuffer'; // Firefox implements the spec which says "blob" by default. Others are rebels. Let's get the same behaviour everywhere.
+		chan.onmessage = function(e) {console.log('got a message: '+ e.data)};
+		chan.send('kikoo\n');
 	});
 }
 </script>
