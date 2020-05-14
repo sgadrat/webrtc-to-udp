@@ -24,7 +24,7 @@ function new_datachannel(client_id, chan) {
 function datachannel_message(client_id, message) {
 	console.log(`got a datachannel message from ${client_id}: ${typeof message}`);
 	let client = clients[client_id];
-	client.udp_socket.send(message, client.relay_destination.port, client.relay_destination.address);
+	client.udp_socket.send(Buffer.from(message), client.relay_destination.port, client.relay_destination.address);
 }
 
 function datachannel_close(client_id) {
