@@ -25,7 +25,7 @@ var wtu = {
 				conn = new RTCPeerConnection({
 					iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 				});
-				chan = conn.createDataChannel("awesome data connection");
+				chan = conn.createDataChannel("udp relay", {ordered: false, maxRetransmits: 0});
 
 				conn.onicecandidate = function(e) {
 					if (e.candidate) {
