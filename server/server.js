@@ -6,35 +6,39 @@ const wrtc = require('wrtc');
 
 let clients = {};
 
+function log(m) {
+	console.log(`${Date.now()} ${m}`);
+}
+
 function clean_client(client_id) {
 	let client = clients[client_id];
 	if (client.web_socket === null && client.data_channel === null) {
-		console.log(`purging ${client_id}`);
+		log(`purging ${client_id}`);
 		delete clients[client_id];
 	}
 }
 
 function new_datachannel(client_id, chan) {
-	console.log(`New data channel for ${client_id}`);
+	log(`New data channel for ${client_id}`);
 	clients[client_id].data_channel = chan;
 	chan.onmessage = function(e) { datachannel_message(client_id, e.data); };
 	chan.onclose = function(e) { datachannel_close(client_id); };
 }
 
 function datachannel_message(client_id, message) {
-	console.log(`got a datachannel message from ${client_id}: ${typeof message}`);
+	log(`got a datachannel message from ${client_id}: ${typeof message}`);
 	let client = clients[client_id];
 	client.udp_socket.send(Buffer.from(message), client.relay_destination.port, client.relay_destination.address);
 }
 
 function datachannel_close(client_id) {
-	console.log(`channel closed for ${client_id}`);
+	log(`channel closed for ${client_id}`);
 	clients[client_id].data_channel = null;
 	clean_client(client_id);
 }
 
 function websocket_message(client_id, message) {
-	console.log(`got a websocket message from ${client_id}`);
+	log(`got a websocket message from ${client_id}`);
 	let msg = JSON.parse(message);
 	let client = clients[client_id];
 
@@ -53,7 +57,7 @@ function websocket_message(client_id, message) {
 		.then(() => client.wrtc_connection.createAnswer())
 		.then(answer => client.wrtc_connection.setLocalDescription(answer))
 		.then(function() {
-			console.log(`sending answer to ${client_id}`);
+			log(`sending answer to ${client_id}`);
 			client.web_socket.send(JSON.stringify({
 				type: 'ice.answer',
 				answer: client.wrtc_connection.localDescription,
@@ -65,20 +69,22 @@ function websocket_message(client_id, message) {
 }
 
 function websocket_close(client_id) {
-	console.log(`websocket closed for ${client_id}`);
+	log(`websocket closed for ${client_id}`);
 	clients[client_id].web_socket = null;
 	clean_client(client_id);
 }
 
 function udp_message(client_id, message) {
-	console.log(`got an udp message for ${client_id}`);
-	clients[client_id].data_channel.send(message);
+	log(`got an udp message for ${client_id}`);
+	if (client_id in clients && clients[client_id].data_channel !== null) {
+		clients[client_id].data_channel.send(message);
+	}
 }
 
 const wss = new WebSocket.Server({ port: 3003 });
 wss.on('connection', function connection(ws, request, client) {
 	let client_id = `${request.socket.remoteAddress}-${request.socket.remotePort}`;
-	console.log(`new connection from ${client_id}`);
+	log(`new connection from ${client_id}`);
 
 	// Initialize client's state
 	clients[client_id] = {
@@ -97,14 +103,14 @@ wss.on('connection', function connection(ws, request, client) {
 	conn.onicecandidate = function(e) {
 		if (e.candidate) {
 			if (e.candidate.candidate != '') {
-				console.log(`new ice candidate for ${client_id}`);
+				log(`new ice candidate for ${client_id}`);
 				ws.send(JSON.stringify({
 					type: 'ice.candidate',
 					candidate: e.candidate
 				}));
 			}
 		}else {
-			console.log(`end of candidates for ${client_id}`);
+			log(`end of candidates for ${client_id}`);
 		}
 	};
 
