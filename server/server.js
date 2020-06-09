@@ -4,6 +4,8 @@ const dgram = require('dgram');
 const WebSocket = require('ws');
 const wrtc = require('wrtc');
 
+const destinations_whitelist = ['127.0.0.1']; // TODO load if from config-file/commandline/whatever
+
 let clients = {};
 
 function log(m) {
@@ -46,7 +48,13 @@ function websocket_message(client_id, message) {
 	let client = clients[client_id];
 
 	if (msg.type === 'relay.offer') {
-		//TODO Reject if the destination is not whitelisted
+		// Reject if the destination is not whitelisted
+		if (destinations_whitelist.indexOf(msg.relay_destination.address) === -1) {
+			log(`rejecting connection to unknown destination "${msg.relay_destination.address}"`);
+			client.web_socket.close();
+			return;
+		}
+
 		//TODO Resolve destination host (else it will be silently done by dgram.Socket.send() for each packet)
 
 		// Create UDP socket based on msg.relay_destination
@@ -67,7 +75,9 @@ function websocket_message(client_id, message) {
 			}))
 		});
 	}else if (msg.type === 'ice.candidate') {
-		client.wrtc_connection.addIceCandidate(msg.candidate);
+		if (client.web_socket !== null && client.web_socket.readyState == WebSocket.OPEN) {
+			client.wrtc_connection.addIceCandidate(msg.candidate);
+		}
 	}
 }
 
