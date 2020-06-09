@@ -28,26 +28,24 @@ var wtu = {
 				chan = conn.createDataChannel("udp relay", {ordered: false, maxRetransmits: 0});
 
 				conn.onicecandidate = function(e) {
-					if (e.candidate) {
-						if (e.candidate.candidate !== '') {
-							console.log('sending an ICE candidate');
+					if (e.candidate) { // candidate is null when the list is complete
+						if (e.candidate.candidate !== '') { // Firefox adds an empty candidate at the end of the list
+							// Send the ICE candidate over websocket
 							sock.send(JSON.stringify({
 								type: 'ice.candidate',
 								candidate: e.candidate,
 							}));
 						}
-					}else {
-						console.log('end of candidates');
 					}
 				};
 
 				chan.onopen = function(e) {
-					console.log("conection opened");
+					// Connection opened, fulfill the promise
 					fulfill(chan);
 				};
 
 				conn.createOffer().then(function(offer) {
-					console.log('created offer');
+					// Created offer, set it as local description and send it to the relay
 					conn.setLocalDescription(offer).then(function () {
 						sock.send(JSON.stringify({
 							type: 'relay.offer',
@@ -61,13 +59,11 @@ var wtu = {
 			sock.onmessage = function(e) {
 				msg = JSON.parse(e.data);
 				if (msg.type === 'ice.candidate') {
-					console.log('got remote ICE candidate');
 					conn.addIceCandidate(msg.candidate);
 				}else if (msg.type === 'ice.answer') {
-					console.log('got ICE answer');
 					conn.setRemoteDescription(msg.answer);
 				}else {
-					console.log('unknown message type on websocket: '+ e.data);
+					console.error('unknown message type on websocket: '+ e.data);
 				}
 			};
 		});

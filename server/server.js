@@ -10,6 +10,9 @@ function log(m) {
 	console.log(`${Date.now()} ${m}`);
 }
 
+function dbg(m) {
+}
+
 function clean_client(client_id) {
 	let client = clients[client_id];
 	if (client.web_socket === null && client.data_channel === null) {
@@ -26,7 +29,7 @@ function new_datachannel(client_id, chan) {
 }
 
 function datachannel_message(client_id, message) {
-	log(`got a datachannel message from ${client_id}: ${typeof message}`);
+	dbg(`got a datachannel message from ${client_id}: ${typeof message}`);
 	let client = clients[client_id];
 	client.udp_socket.send(Buffer.from(message), client.relay_destination.port, client.relay_destination.address);
 }
@@ -38,7 +41,7 @@ function datachannel_close(client_id) {
 }
 
 function websocket_message(client_id, message) {
-	log(`got a websocket message from ${client_id}`);
+	dbg(`got a websocket message from ${client_id}`);
 	let msg = JSON.parse(message);
 	let client = clients[client_id];
 
@@ -57,7 +60,7 @@ function websocket_message(client_id, message) {
 		.then(() => client.wrtc_connection.createAnswer())
 		.then(answer => client.wrtc_connection.setLocalDescription(answer))
 		.then(function() {
-			log(`sending answer to ${client_id}`);
+			dbg(`sending answer to ${client_id}`);
 			client.web_socket.send(JSON.stringify({
 				type: 'ice.answer',
 				answer: client.wrtc_connection.localDescription,
@@ -75,7 +78,7 @@ function websocket_close(client_id) {
 }
 
 function udp_message(client_id, message) {
-	log(`got an udp message for ${client_id}`);
+	dbg(`got an udp message for ${client_id}`);
 	if (client_id in clients && clients[client_id].data_channel !== null) {
 		clients[client_id].data_channel.send(message);
 	}
@@ -103,14 +106,14 @@ wss.on('connection', function connection(ws, request, client) {
 	conn.onicecandidate = function(e) {
 		if (e.candidate) {
 			if (e.candidate.candidate != '') {
-				log(`new ice candidate for ${client_id}`);
+				dbg(`new ice candidate for ${client_id}`);
 				ws.send(JSON.stringify({
 					type: 'ice.candidate',
 					candidate: e.candidate
 				}));
 			}
 		}else {
-			log(`end of candidates for ${client_id}`);
+			dbg(`end of candidates for ${client_id}`);
 		}
 	};
 
