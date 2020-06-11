@@ -3,6 +3,7 @@ var wtu = {
 	 * @brief Get a data channel that can be used to send UDP datagrams to destination through a WEBRTC relay
 	 * @param relay_server Description of the relay server
 	 * @param destination Description the destinations
+	 * @param use_ssl True to connect to the relay server with a secure web socket
 	 *
 	 * relay_server properties:
 	 *  {
@@ -16,11 +17,11 @@ var wtu = {
 	 *    "port": int, // Destination port
 	 *  }
 	 */
-	get_channel: function(relay_server, destination) {
+	get_channel: function(relay_server, destination, use_ssl) {
 		return new Promise(function(fulfill, reject) {
 			var conn = null;
 			var chan = null;
-			var sock = new WebSocket('ws://'+ relay_server.address +':'+ relay_server.port +'/');
+			var sock = new WebSocket((use_ssl?'wss':'ws') +'://'+ relay_server.address +':'+ relay_server.port +'/');
 			sock.onopen = function(e) {
 				conn = new RTCPeerConnection({
 					iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],

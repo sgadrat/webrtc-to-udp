@@ -1,10 +1,16 @@
 'use strict';
 
+const https = require('https');
+const fs = require('fs');
 const dgram = require('dgram');
 const WebSocket = require('ws');
 const wrtc = require('wrtc');
 
 const destinations_whitelist = ['127.0.0.1']; // TODO load if from config-file/commandline/whatever
+
+const use_ssl = false;
+const ssl_key = '/path/to/privkey.pem'
+const ssl_cert = '/path/to/fullchain.pem';
 
 let clients = {};
 
@@ -94,7 +100,20 @@ function udp_message(client_id, message) {
 	}
 }
 
-const wss = new WebSocket.Server({ port: 3003 });
+let wss = null;
+if (use_ssl) {
+	const options = {
+		key: fs.readFileSync(ssl_key),
+		cert: fs.readFileSync(ssl_cert)
+	};
+	let server = https.createServer(options);
+	server.on('error', (err) => console.error(err));
+	server.listen(3003, () => console.log('HTTPS running on port 3003'));
+
+	wss = new WebSocket.Server({server});
+}else {
+	wss = new WebSocket.Server({port: 3003});
+}
 wss.on('connection', function connection(ws, request, client) {
 	let client_id = `${request.socket.remoteAddress}-${request.socket.remotePort}`;
 	log(`new connection from ${client_id}`);
