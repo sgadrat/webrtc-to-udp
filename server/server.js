@@ -15,7 +15,7 @@ const ssl_cert = '/path/to/fullchain.pem';
 let clients = {};
 
 function log(m) {
-	console.log(`${Date.now()} ${m}`);
+	console.log(`[${(new Date()).toISOString()}] ${m}`);
 }
 
 function dbg(m) {
