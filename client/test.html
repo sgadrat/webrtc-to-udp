@@ -4,7 +4,7 @@
 <script>
 function doit() {
 	wtu.get_channel(
-		{'address': 'localhost', 'port': 3003},
+		{'address': 'localhost', 'port': 3003, 'ssl': false},
 		{'address': '127.0.0.1', 'port': 1234},
 	)
 	.then(function(chan) {
