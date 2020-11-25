@@ -6,12 +6,14 @@ const dgram = require('dgram');
 const WebSocket = require('ws');
 const wrtc = require('wrtc');
 
-const destinations_whitelist = ['127.0.0.1']; // TODO load if from config-file/commandline/whatever
-const client_inactivity_timeout = 10 * 60 * 1000;
+let config = {
+	'destinations_whitelist': ['127.0.0.1'],
+	'client_inactivity_timeout': 10 * 60 * 1000,
 
-const use_ssl = false;
-const ssl_key = '/path/to/privkey.pem'
-const ssl_cert = '/path/to/fullchain.pem';
+	'use_ssl': false,
+	'ssl_key': '/path/to/privkey.pem',
+	'ssl_cert': '/path/to/fullchain.pem',
+};
 
 let clients = {};
 
@@ -58,7 +60,7 @@ function clean_client(client_id) {
 /** Remove a client if it has timeouted */
 function timeout_client(client_id) {
 	let client = clients[client_id];
-	if (client.last_activity < Date.now() - client_inactivity_timeout) {
+	if (client.last_activity < Date.now() - config['client_inactivity_timeout']) {
 		log(`timeout ${client_id}`);
 		erase_client(client_id);
 	}
@@ -98,7 +100,7 @@ function websocket_message(client_id, message) {
 
 	if (msg.type === 'relay.offer') {
 		// Reject if the destination is not whitelisted
-		if (destinations_whitelist.indexOf(msg.relay_destination.address) === -1) {
+		if (config['destinations_whitelist'].indexOf(msg.relay_destination.address) === -1) {
 			log(`rejecting connection to unknown destination "${msg.relay_destination.address}"`);
 			client.web_socket.close();
 			return;
@@ -145,11 +147,24 @@ function udp_message(client_id, message) {
 	tick_client(client_id);
 }
 
+// Read config
+try {
+	const system_conf_file_path = '/etc/webrtc-to-udp/server.json';
+	fs.accessSync(system_conf_file_path, fs.constants.R_OK);
+	console.log('Reading config from "'+ system_conf_file_path +'"');
+	config = JSON.parse(fs.readFileSync(system_conf_file_path));
+	console.log('Using config from "'+ system_conf_file_path +'"');
+}catch(e) {
+	console.log('Using default config');
+}
+console.log(JSON.stringify(config, null, ' '));
+
+// Start server
 let wss = null;
-if (use_ssl) {
+if (config['use_ssl']) {
 	const options = {
-		key: fs.readFileSync(ssl_key),
-		cert: fs.readFileSync(ssl_cert)
+		key: fs.readFileSync(config['ssl_key']),
+		cert: fs.readFileSync(config['ssl_cert'])
 	};
 	let server = https.createServer(options);
 	server.on('error', (err) => console.error(err));
@@ -173,7 +188,7 @@ wss.on('connection', function connection(ws, request, client) {
 			iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 		}),
 		last_activity: Date.now(),
-		timeout: setInterval(timeout_client, client_inactivity_timeout, client_id),
+		timeout: setInterval(timeout_client, config['client_inactivity_timeout'], client_id),
 	};
 
 	// Configure WEBRTC peer connection
