@@ -11,7 +11,7 @@ function doit() {
 		console.log('Channel available for pwning noobs!');
 		chan.binaryType = 'arraybuffer'; // Firefox implements the spec which says "blob" by default. Others are rebels. Let's get the same behaviour everywhere.
 		chan.onmessage = function(e) {console.log('got a message: '+ e.data)};
-		chan.send('kikoo\n');
+		setInterval(function () {chan.send('kikoo\n');}, 2000);
 	});
 }
 </script>

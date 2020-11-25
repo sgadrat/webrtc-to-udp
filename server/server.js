@@ -7,6 +7,7 @@ const WebSocket = require('ws');
 const wrtc = require('wrtc');
 
 const destinations_whitelist = ['127.0.0.1']; // TODO load if from config-file/commandline/whatever
+const client_inactivity_timeout = 10 * 60 * 1000;
 
 const use_ssl = false;
 const ssl_key = '/path/to/privkey.pem'
@@ -21,12 +22,52 @@ function log(m) {
 function dbg(m) {
 }
 
+function show_status() {
+	log(`${Object.keys(clients).length} clients connected`);
+}
+
+/** Remove a client */
+function erase_client(client_id) {
+	let client = clients[client_id];
+	clearInterval(client.timeout);
+	if (client.web_socket !== null) {
+		client.web_socket.removeAllListeners();
+		client.web_socket.close();
+		client.web_socket = null;
+	}
+	if (client.data_channel !== null) {
+		client.data_channel.onmessage = null;
+		client.data_channel.onclose = null;
+		client.data_channel.close();
+		client.data_channel = null;
+	}
+	client.wrtc_connection.close();
+	delete clients[client_id];
+	show_status();
+}
+
+/** Remove a client if it has cleanly closed all connections */
 function clean_client(client_id) {
 	let client = clients[client_id];
 	if (client.web_socket === null && client.data_channel === null) {
 		log(`purging ${client_id}`);
-		delete clients[client_id];
+		erase_client(client_id);
 	}
+}
+
+/** Remove a client if it has timeouted */
+function timeout_client(client_id) {
+	let client = clients[client_id];
+	if (client.last_activity < Date.now() - client_inactivity_timeout) {
+		log(`timeout ${client_id}`);
+		erase_client(client_id);
+	}
+}
+
+/** Mark client as active */
+function tick_client(client_id) {
+	let client = clients[client_id];
+	client.last_activity = Date.now();
 }
 
 function new_datachannel(client_id, chan) {
@@ -34,12 +75,14 @@ function new_datachannel(client_id, chan) {
 	clients[client_id].data_channel = chan;
 	chan.onmessage = function(e) { datachannel_message(client_id, e.data); };
 	chan.onclose = function(e) { datachannel_close(client_id); };
+	tick_client(client_id);
 }
 
 function datachannel_message(client_id, message) {
 	dbg(`got a datachannel message from ${client_id}: ${typeof message}`);
 	let client = clients[client_id];
 	client.udp_socket.send(Buffer.from(message), client.relay_destination.port, client.relay_destination.address);
+	tick_client(client_id);
 }
 
 function datachannel_close(client_id) {
@@ -85,6 +128,7 @@ function websocket_message(client_id, message) {
 			client.wrtc_connection.addIceCandidate(msg.candidate);
 		}
 	}
+	tick_client(client_id);
 }
 
 function websocket_close(client_id) {
@@ -98,6 +142,7 @@ function udp_message(client_id, message) {
 	if (client_id in clients && clients[client_id].data_channel !== null) {
 		clients[client_id].data_channel.send(message);
 	}
+	tick_client(client_id);
 }
 
 let wss = null;
@@ -127,6 +172,8 @@ wss.on('connection', function connection(ws, request, client) {
 		wrtc_connection: new wrtc.RTCPeerConnection({
 			iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
 		}),
+		last_activity: Date.now(),
+		timeout: setInterval(timeout_client, client_inactivity_timeout, client_id),
 	};
 
 	// Configure WEBRTC peer connection
@@ -149,4 +196,7 @@ wss.on('connection', function connection(ws, request, client) {
 	// Handle messages on signaling websocket
 	ws.on('message', function(message) { websocket_message(client_id, message); });
 	ws.on('close', function() { websocket_close(client_id); });
+
+	// Show new server's state
+	show_status();
 });
