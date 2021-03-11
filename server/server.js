@@ -30,6 +30,10 @@ function show_status() {
 
 /** Remove a client */
 function erase_client(client_id) {
+	if (!(client_id in clients)) {
+		return
+	}
+
 	let client = clients[client_id];
 	clearInterval(client.timeout);
 	if (client.web_socket !== null) {
@@ -50,6 +54,10 @@ function erase_client(client_id) {
 
 /** Remove a client if it has cleanly closed all connections */
 function clean_client(client_id) {
+	if (!(client_id in clients)) {
+		return
+	}
+
 	let client = clients[client_id];
 	if (client.web_socket === null && client.data_channel === null) {
 		log(`purging ${client_id}`);
@@ -59,6 +67,10 @@ function clean_client(client_id) {
 
 /** Remove a client if it has timeouted */
 function timeout_client(client_id) {
+	if (!(client_id in clients)) {
+		return
+	}
+
 	let client = clients[client_id];
 	if (client.last_activity < Date.now() - config['client_inactivity_timeout']) {
 		log(`timeout ${client_id}`);
@@ -68,12 +80,21 @@ function timeout_client(client_id) {
 
 /** Mark client as active */
 function tick_client(client_id) {
+	if (!(client_id in clients)) {
+		return
+	}
+
 	let client = clients[client_id];
 	client.last_activity = Date.now();
 }
 
 function new_datachannel(client_id, chan) {
 	log(`New data channel for ${client_id}`);
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
 	clients[client_id].data_channel = chan;
 	chan.onmessage = function(e) { datachannel_message(client_id, e.data); };
 	chan.onclose = function(e) { datachannel_close(client_id); };
@@ -82,6 +103,11 @@ function new_datachannel(client_id, chan) {
 
 function datachannel_message(client_id, message) {
 	dbg(`got a datachannel message from ${client_id}: ${typeof message}`);
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
 	let client = clients[client_id];
 	client.udp_socket.send(Buffer.from(message), client.relay_destination.port, client.relay_destination.address);
 	tick_client(client_id);
@@ -89,12 +115,22 @@ function datachannel_message(client_id, message) {
 
 function datachannel_close(client_id) {
 	log(`channel closed for ${client_id}`);
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
 	clients[client_id].data_channel = null;
 	clean_client(client_id);
 }
 
 function websocket_message(client_id, message) {
 	dbg(`got a websocket message from ${client_id}`);
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
 	let msg = JSON.parse(message);
 	let client = clients[client_id];
 
@@ -135,13 +171,23 @@ function websocket_message(client_id, message) {
 
 function websocket_close(client_id) {
 	log(`websocket closed for ${client_id}`);
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
 	clients[client_id].web_socket = null;
 	clean_client(client_id);
 }
 
 function udp_message(client_id, message) {
 	dbg(`got an udp message for ${client_id}`);
-	if (client_id in clients && clients[client_id].data_channel !== null) {
+	if (!(client_id in clients)) {
+		dbg('ignored, unknown client');
+		return
+	}
+
+	if (clients[client_id].data_channel !== null) {
 		clients[client_id].data_channel.send(message);
 	}
 	tick_client(client_id);
