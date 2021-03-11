@@ -24,6 +24,18 @@ function log(m) {
 function dbg(m) {
 }
 
+/** Adds an event listener that can easily be removed later (takes care of keeping a listener's reference) */
+function set_my_listener(emitter, event_name, listener) {
+	emitter['my_'+event_name+'_listener'] = listener;
+	emitter.on(event_name, emitter['my_'+event_name+'_listener']);
+}
+
+/** Remove an event listener added by set_my_listener */
+function del_my_listener(emitter, event_name) {
+	emitter.removeListener('message', emitter['my_'+event_name+'_listener']);
+	delete emitter['my_'+event_name+'_listener'];
+}
+
 function show_status() {
 	log(`${Object.keys(clients).length} clients connected`);
 }
@@ -37,7 +49,8 @@ function erase_client(client_id) {
 	let client = clients[client_id];
 	clearInterval(client.timeout);
 	if (client.web_socket !== null) {
-		client.web_socket.removeAllListeners();
+		del_my_listener(client.web_socket, 'message');
+		del_my_listener(client.web_socket, 'close');
 		client.web_socket.close();
 		client.web_socket = null;
 	}
@@ -47,7 +60,17 @@ function erase_client(client_id) {
 		client.data_channel.close();
 		client.data_channel = null;
 	}
-	client.wrtc_connection.close();
+	if (client.wrtc_connection !== null) {
+		client.wrtc_connection.close();
+		client.wrtc_connection.ondatachannel = null;
+		client.wrtc_connection.onicecandidate = null;
+		client.wrtc_connection = null;
+	}
+	if (client.udp_socket !== null) {
+		del_my_listener(client.udp_socket, 'message');
+		client.udp_socket.close();
+		client.udp_socket = null;
+	}
 	delete clients[client_id];
 	show_status();
 }
@@ -148,7 +171,7 @@ function websocket_message(client_id, message) {
 		client.relay_destination = msg.relay_destination;
 		client.udp_socket = dgram.createSocket('udp4');
 		client.udp_socket.bind();
-		client.udp_socket.on('message', function(msg, remote_info) { udp_message(client_id, msg); });
+		set_my_listener(client.udp_socket, 'message', function(msg, remote_info) { udp_message(client_id, msg); });
 
 		// Accept ICE offer
 		client.wrtc_connection.setRemoteDescription(msg.ice_offer)
@@ -255,8 +278,8 @@ wss.on('connection', function connection(ws, request, client) {
 	};
 
 	// Handle messages on signaling websocket
-	ws.on('message', function(message) { websocket_message(client_id, message); });
-	ws.on('close', function() { websocket_close(client_id); });
+	set_my_listener(ws, 'message', function(message) { websocket_message(client_id, message); });
+	set_my_listener(ws, 'close', function() { websocket_close(client_id); });
 
 	// Show new server's state
 	show_status();
